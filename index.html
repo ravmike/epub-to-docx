@@ -274,7 +274,8 @@ function toBlocks(html) {
     // Common in FB2→EPUB conversions: <p class="p"><strong>Глава 1. Title</strong></p>
     if (n.children.length === 1 && n.children[0].tagName === 'STRONG') {
       const t = n.textContent.trim();
-      if (t.length > 0 && t.length < 200) return true;
+      // Filter out short dialog dashes wrapped in <strong>
+      if (t.length > 3 && t.length < 200 && !/^[–—-]\s*$/.test(t)) return true;
     }
     // Also detect explicit heading patterns in text
     const t = n.textContent.trim();
@@ -311,12 +312,13 @@ function toBlocks(html) {
       out.push({T:'p', text:t});
       return;
     }
-    if (['div','blockquote','li','figcaption','td','th','dt','dd','address','pre','section','article'].includes(tag)) {
+    if (['blockquote','li','figcaption','td','th','dt','dd','address','pre'].includes(tag)) {
       n.querySelectorAll('img').forEach(i=>{ const s=i.getAttribute('src')||''; if(s.startsWith('data:image')) out.push({T:'img',src:s}); });
       const t=n.textContent.trim();
       if(t) out.push({T:'p',text:(tag==='li'?'• ':'')+t});
       return;
     }
+    // Container elements (div, span, section, article, body) — recurse into children
     for (const c of n.childNodes) walk(c);
   })(div);
   return out;
