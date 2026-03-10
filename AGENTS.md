@@ -27,7 +27,7 @@ Flows:
 - `parseEpub(arrayBuffer, { log })` in `epub-core.js` — unzips EPUB, reads OPF, resolves spine order, inlines manifest images as data URIs, returns `{ bookTitle, chapters }`
 - `toBlocks(html)` in `epub-core.js` — parses chapter HTML into typed blocks: `{T:'h'}` (heading), `{T:'p'}` (paragraph), `{T:'br'}` (break), `{T:'hr'}`, `{T:'img'}`, `{T:'t'}` (bare text)
 - PDF `writeText(...)` in `index.html` — writes wrapped text with page breaks and spacing
-- DOCX `buildDoc(epub)` in `docx.html` — maps blocks to Word title / TOC / headings / paragraphs / images and returns a `Document`
+- DOCX `buildDoc(epub)` in `docx.html` — maps blocks to Word title / headings / paragraphs / images and returns a `Document`
 
 ## Chapter detection
 
@@ -47,12 +47,12 @@ Important: spine item boundaries are not treated as chapter/page boundaries by t
 ## DOCX features
 
 - Title paragraph from EPUB metadata
-- Word TOC field near the top of the document
 - EPUB headings mapped to Word `Heading 1/2/3`
 - Paragraph first-line indent
 - Embedded EPUB images when they resolve to supported data URIs
 - Uses Word-native fonts instead of runtime webfont downloads
 - No forced page breaks between spine items or headings
+- No explicit Word TOC field; navigation is expected to come from real heading styles in Word / ElevenReader
 
 ## Testing
 
@@ -63,10 +63,44 @@ conda run -n epub-test python /Users/michael/.agents/skills/webapp-testing/scrip
   -- python /tmp/your_playwright_check.py
 ```
 
-What to verify:
+Preferred real-world regression set:
+- `samples/_alex_barcelona-mirnij_voin.epub`
+- `samples/piter_uotts-lozhnaya_slepota-1488914040.epub`
+
+What to verify in browser:
 - `index.html` still converts EPUB to PDF without forcing a new page for every spine item
 - `docx.html` downloads a `.docx` successfully
-- generated DOCX contains a TOC field, heading structure, and `word/media/` entries when source EPUB has images
+
+What to verify by inspecting the generated `.docx` as a ZIP:
+- `word/document.xml` exists and does not contain a `TOC` field instruction
+- expected chapter / section titles are emitted inside `Heading1` / `Heading2` / `Heading3` paragraphs
+- headings are real paragraph styles, not just bold body text
+- numeric note labels are not promoted to headings
+- decorative separators such as `* * *` are not promoted to headings
+- `word/media/` entries exist when source EPUB contains supported images
+
+Useful pattern:
+1. Export DOCX in Playwright from `docx.html`
+2. Save the download to `/tmp/...`
+3. Open it with Python `zipfile`
+4. Inspect `word/document.xml` and `word/styles.xml`
+
+Recent heading-semantic checks were run with a script shaped like:
+```bash
+conda run -n epub-test python /Users/michael/.agents/skills/webapp-testing/scripts/with_server.py \
+  --server "python3 -m http.server 8133 --bind 127.0.0.1" --port 8133 \
+  -- python /tmp/epub_docx_test/test_headings_docx.py
+```
+
+## Commit / Push Rules
+
+- Do not commit `.DS_Store`, sample outputs, or ad-hoc files from `/tmp`
+- Stage only files relevant to the task; leave unrelated local changes untouched
+- Before committing DOCX changes, run at least one real browser export from `samples/` and inspect the resulting `.docx` internals
+- If the task affects heading detection or navigation, verification must include checks inside `word/document.xml`, not only UI/download success
+- Use a normal commit, not `--amend`, unless the user explicitly asks for amend
+- Push only when the user explicitly asks to push
+- Default deploy path is `origin main`; pushing to `main` triggers GitHub Pages deployment
 
 ## Deployment
 
